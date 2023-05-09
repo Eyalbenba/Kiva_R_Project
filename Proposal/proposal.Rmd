@@ -9,6 +9,7 @@ library(knitr)
 library(tidyverse)
 library(broom)
 library(htmltools)
+library(countrycode)
 ```
 
 ```{r setup, include = FALSE}
@@ -17,19 +18,16 @@ opts_chunk$set(echo=FALSE) # hide source code in the document
 
 ## 1. Introduction
 
-Kiva is a microfinance organization that connects lenders with borrowers in developing countries. Through its online platform, Kiva enables individuals and organizations to lend money to entrepreneurs and small business owners who are seeking financial assistance to start or grow their businesses. The Kiva dataset contains a wealth of information on loans funded through the platform, including borrower characteristics, loan terms, and repayment data.
+Kiva, the world's largest crowdfunding platform for microfinance loans, has facilitated over $2 billion in loans to date. Kiva connects borrowers with lenders worldwide, with the goal of alleviating poverty through financial inclusion. However, not all loan requests on Kiva get funded, and it's important to understand the reasons why some loans get funded while others do not. In this research, we aim to answer the question: Can we predict if a loan will be funded or not based on the characteristics of the loan?
 
-Access to financing is essential for economic development, poverty reduction, and financial inclusion. However, the risk of default and non-repayment is a major concern for lenders, particularly in the case of microfinance. This worldwide problem has motivated the use of predictive models to estimate the likelihood of loan repayment, which can help lenders make informed decisions and allocate resources more efficiently.
 
-The general problem area that this analysis contributes to is the development of predictive/explanatory modeling for microfinances that can help lenders lower the risk of default and make more efficient decisions using data.
+Furthermore, we want to investigate if there is any bias in loan funding on Kiva. Bias can manifest in many forms, including gender bias, geographic bias, and cultural bias. If there is bias in loan funding, it could perpetuate inequality and limit access to financial resources for certain groups of people.
 
-In this study, we aim to investigate the predictive power of loan characteristics on loan repayment. Specifically, we will explore whether loans with more people contributing to them have a higher chance of being paid back or not. This is based on the idea that the collective knowledge and expertise of multiple lenders, also known as the "wisdom of the crowd," may lead to better lending decisions and ultimately, better loan performance.
 
-This problem is hard to assess because loan repayment is affected by multiple factors, including borrower characteristics, loan terms, social dynamics, and external factors such as economic conditions. Moreover, the dataset is complex, with a large number of variables and observations, and requires careful cleaning, preprocessing, and feature engineering. This problem was researched before and we added notable researches regarding the topic in the Appendix.
+Our research is important because it can help Kiva and other microfinance platforms to improve their loan screening process and provide insights into how to promote more equitable access to financial resources. However, predicting loan funding is a challenging task as it involves analyzing a large number of variables such as the loan purpose, the borrower's profile, and the loan terms. Therefore, our approach involves using machine learning algorithms to analyze the Kiva dataset and identify the key factors that determine whether a loan will be funded or not, and to explore any patterns of bias in loan funding.
 
-By analyzing the Kiva dataset and using statistical modeling techniques, we hope to shed light on the factors that influence loan repayment and provide insights into how microfinance institutions can use data to improve their lending practices.
 
-WHAT IS OUR APPROACH?
+Our Approach to the data is first doing Exploratory data analysis to analyze and investigate the dataset to find patterns or phenomenas in the data. After that we will make a Logistic Regression model to try and predict wheather a loan will be funded or not 
 
 ## 2. Data
 
@@ -42,12 +40,101 @@ kiva_data%>%
   select_if(is.numeric)%>%
   summary()
 
+kiva_data <- kiva_data %>%
+  mutate(funded = ifelse(STATUS=="funded",1,0))
+kiva_data$funded <- as.factor(kiva_data$funded)
+
 ```
 
 
 ## 3. Preliminary results
 
+#### <span style="color:blue"> In this Graph we want to get a feel of our sub question, if there is any bias in loan funding on Kiva , by checking funding counts by continent </span>
+
+```{r}
+
+
+continent_lookup <- data.frame(countrycode::codelist$iso2c, countrycode::codelist$region)
+
+
+colnames(continent_lookup) <- c("country_code", "continent")
+
+kiva_data <- kiva_data %>%
+  left_join(continent_lookup, by = c("COUNTRY_CODE" = "country_code"))
+
+
+  ggplot(data = kiva_data, aes(x = continent, fill = funded)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = c("red", "blue"), labels = c("Not Funded", "Funded")) + 
+  theme(axis.text.x=element_text(angle=45,vjust = 1,hjust = 1))
+  
+
+#axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1
+```
+
+#### <span style="color:blue"> As seen in the graph there are contitent that seem to have higher rates of funding declines , In our project we will check to see if the reason is bias.</span>
+
+### <span style="color:blue"> In the next two graphs we want to get a feel of sector segmentation of funding</span>
+#### <span style="color:blue"> The First Graph shows the proportion of funding declines per sector and the second graph shows funded amount per sector</span>
+
+```{r}
+kiva_data <- kiva_data %>%
+  mutate(funded = ifelse(STATUS=="funded",1,0))
+
+
+total_per_sector <-  kiva_data %>% 
+  group_by(SECTOR_NAME) %>% 
+  summarise(count = n())
+
+
+total_not_funded_per_sector <- kiva_data %>%
+  group_by(SECTOR_NAME) %>% 
+  summarise(not_funded = sum(ifelse(funded == 0, 1, 0)))
+
+
+proportions <- total_not_funded_per_sector$not_funded / total_per_sector$count
+
+proportions_tbl <- tibble(Sectors = total_not_funded_per_sector$SECTOR_NAME,
+                          proportions = proportions)
+
+
+
+
+ggplot(proportions_tbl, aes(x = reorder(Sectors, -proportions), y = proportions)) +
+  geom_col(color = "#008080", size = 1.2) +
+  labs(x = "Sector", y = "Proportion of Loans Not Funded", 
+       title = "Proportion of Loans Not Funded by Sector") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold"),
+        axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+
+```
+
+
+
+
+
+
+
 ## 4. Data analysis plan
+
+2.In order to perform our analysis, we have a large dataset that has been split into four equally sized subsets, each containing 400K rows. This allows us to create comparison groups and perform cross-validation by further splitting the subsets into test and train subsets. We will use this approach to compare and evaluate different models and methods for our analysis. By using multiple comparison groups and cross-validation, we can ensure that our results are robust and not biased by a single subset or model.
+
+4.
+To support the hypothesized question of predicting funding of a loan using Logistic Regression, we would need several statistical results, such as:
+	1	Model performance metrics: We need to measure the accuracy of the model's predictions, such as sensitivity, specificity, and area under the curve (AUC).
+	2	Significance of predictor variables: We need to determine the significance of each predictor variable in the model, which can be done by examining the p-values of the coefficient estimates.
+
+For our subquestion of the research - Investigate if there is any bias in loan funding on Kiva we will
+need to perform statistical tests to compare the funding rates between different groups of loans. This could involve comparing the funding rates between loans from different countries, different loan purposes, different loan sizes, or any other relevant categories.
+
 
 ## Appendix
 https://escholarship.org/uc/item/9cc4t85b#article_main - Loan Repayment Prediction Using Machine Learning Algorithms by Chang Han 2019
@@ -62,5 +149,5 @@ cat(readLines('../data/README.md'), sep = '\n')
 ### Source code
 
 ```{r, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
-
+tinytex::install_tinytex()
 ```
