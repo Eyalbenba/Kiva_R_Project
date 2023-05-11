@@ -24,16 +24,16 @@ opts_chunk$set(echo=FALSE) # hide source code in the document
 
 ## 1. Introduction
 
-\color{blue} Kiva, the world's largest crowdfunding platform for microfinance loans, has facilitated over $2 billion in loans to date. Kiva connects borrowers with lenders worldwide, with the goal of alleviating poverty through financial inclusion. However, not all loan requests on Kiva get funded, and it's important to understand the reasons why some loans get funded while others do not. In this research, we aim to answer the question: Can we predict if a loan will be funded or not based on the characteristics of the loan? 
+\color{blue} Kiva is a non-profit organization that provides microfinance loans to underserved communities around the world. However, not all loans are equally successful in achieving their intended impact. Our research aims to contribute to the larger problem of improving the effectiveness of microfinance by exploring the characteristics of loans that are more likely to be funded, repaid, or defaulted.
 
 
-Furthermore, we want to investigate if there is any bias in loan funding on Kiva. Bias can manifest in many forms, including gender bias, geographic bias, and cultural bias. If there is bias in loan funding, it could perpetuate inequality and limit access to financial resources for certain groups of people.
+Specifically, our research question is whether we can predict the likelihood of loan default using loan characteristics available in the Kiva dataset. Additionally, we are investigating whether loans with more lenders have a higher likelihood of repayment, potentially leveraging the "wisdom of the crowd" to improve loan outcomes.
 
 
-Our research is important because it can help Kiva and other microfinance platforms to improve their loan screening process and provide insights into how to promote more equitable access to financial resources. However, predicting loan funding is a challenging task as it involves analyzing a large number of variables such as the loan purpose, the borrower's profile, and the loan terms. Therefore, our approach involves using machine learning algorithms to analyze the Kiva dataset and identify the key factors that determine whether a loan will be funded or not, and to explore any patterns of bias in loan funding. 
+This research is important because microfinance loans can have a significant impact on the lives of borrowers and their communities, but defaults can harm not only the borrower but also the lender and the broader microfinance ecosystem. By identifying the loan characteristics that are most predictive of default and repayment, we can help lenders make more informed decisions about loan approval and investment, as well as help borrowers and organizations design more effective loan programs. Our approach involves analyzing the Kiva dataset using machine learning techniques to build models that predict loan default and assess the impact of the number of lenders on loan outcomes.
 
-
-Our Approach to the data is first doing Exploratory data analysis to analyze and investigate the dataset to find patterns or phenomenas in the data. After that we will make a Logistic Regression model to try and predict wheather a loan will be funded or not \color{black}
+In addition to our study , numerous studies have been conducted on the Kiva platform, exploring various aspects such as borrower characteristics, loan repayment rates, and lender behavior. These studies provide valuable insights into the factors that impact loan performance and can guide our analysis. For this research, we will be basing our analysis on a couple of these studies, including "I Loan Because...:"  (available at http://www-personal.umich.edu/~qmei/pub/wsdm2012-liu.pdf). This study provides a deeper understanding of why lenders choose to invest in Kiva loans and how they prioritize their lending decisions. By incorporating these findings into our analysis, we hope to gain a more comprehensive understanding of loan funding and repayment on the Kiva platform.
+\color{black}
 
 ## 2. Data
 
@@ -55,14 +55,24 @@ kiva_data$funded <- as.factor(kiva_data$funded)
 ```{r}
 kiva_data <- read.csv("/Users/eyal.benbarouch/Documents/שטיות שלי/Studies/סמסטר ד/תכנות וניתוח נתונים/פריוקט סיום/kiva/loans.csv")
 
-kiva_ml_data
+kiva_ml_data <- read.csv("/Users/eyal.benbarouch/Documents/שטיות שלי/Studies/סמסטר ד/תכנות וניתוח נתונים/פריוקט סיום/kiva/kiva_dataset_ML.csv")
 inner_join_table <- merge(kiva_ml_data,kiva_data,by.y="LOAN_ID",by.x="id",all = FALSE)
-print("hi")
+kiva_joined_data <- inner_join_table
+save_path <- "/Users/eyal.benbarouch/Documents/שטיות שלי/Studies/סמסטר ד/תכנות וניתוח נתונים/פריוקט סיום/kiva/kiva_joined_data.csv"
+write.csv(kiva_joined_data,save_path,row.names = FALSE)
+
+```
 
 
-inner_join <-inner_join(kiva_data,kiva_ml_data,by.x="LOAN_ID",by.y="id")
+```{r}
+status_count <-table(kiva_joined_data$Status)
+status_count
+prop.table(status_count)
+head(kiva_joined_data)
+kiva_join_sample <- kiva_joined_data %>% sample_n(100)
+save_path_sample <- "/Users/eyal.benbarouch/Documents/שטיות שלי/Studies/סמסטר ד/תכנות וניתוח נתונים/פריוקט סיום/kiva/kiva_joined_sample_data.csv"
+write.csv(kiva_join_sample,save_path_sample,row.names=FALSE)
 
-inner_join
 ```
 
 ## 3. Preliminary results
@@ -92,6 +102,44 @@ kiva_data <- kiva_data %>%
 #axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1
 ```
 
+\color{blue} In this Graph we want to get a feel of our sub question, if there the "wisdom of the crowd" factor comes into play - meaning the higher the number of lenders the lower chance of default
+
+
+```{r}
+num_defaulted_per_numlenders <- kiva_joined_data %>%
+  group_by(NUM_LENDERS_TOTAL) %>%
+  filter(Status == "defaulted") %>%
+  summarise(num_defualted = n())
+
+num_per_num_lenders <-  kiva_joined_data %>%
+  group_by(NUM_LENDERS_TOTAL) %>%
+  summarise(total_num_loans = n())
+
+num_total_vs_num_defaulted <- merge(num_per_num_lenders,num_defaulted_per_numlenders)
+
+num_total_vs_num_defaulted <- num_total_vs_num_defaulted %>%
+  mutate(prop_defaulted = num_defualted/total_num_loans)
+
+num_total_vs_num_defaulted %>%
+  filter(total_num_loans > 50) %>%
+  ggplot(aes(x = NUM_LENDERS_TOTAL, y = prop_defaulted)) +
+  geom_line(color = "steelblue", size = 0.7 ) +
+  geom_smooth(method = "loess", se = FALSE, color = "darkred", linetype = "solid") +
+  labs(title = "Proportion of defaulted loans by number of lenders",
+       x = "Number of lenders",
+       y = "Proportion of defaulted loans") +
+  theme_minimal()
+  
+
+
+
+
+
+
+```
+
+As seen in the graph in the beggining the lower number of lenders the higher chacne of default but once we pass a certain point around 75 lenders the chance of default rises , it would be interesting to find out why
+
 
 As seen in the graph there are contitents that seem to have higher rates of funding declines , In our project we will check to see if the reason is bias.
 
@@ -119,7 +167,7 @@ ggplot(kiva_data, aes(x = SECTOR_NAME, y = FUNDED_AMOUNT)) +
 <!-- \color{blue} As seen in the graph the top sectors are food and agriculture. Note that this data is not normelized yet so it may be biased. -->
 
 
-In This Graph we examine the proportion of funding declines per sector 
+In This Graph we examine the proportion of defaulted declines per sector 
 
 ```{r,warning=FALSE,fig.width=4,fig.height=3}
 kiva_data <- kiva_data %>%
